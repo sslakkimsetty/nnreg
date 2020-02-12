@@ -30,6 +30,65 @@ def _grid_generator(H, W, theta):
     return batch_grids
 
 
+def _bilinear_sampler(img, x, y):
+    H = tf.cast(tf.shape(img)[1], "float32")
+    W = tf.cast(tf.shape(img)[2], "float32")
+
+    # De-normalize x, y to W, H
+    x = tf.cast(x, "float32")
+    y = tf.cast(y, "float32")
+    x = (x/2 + 0.5) * W
+    y = (y/2 + 0.5) * H
+
+    # Define min and max of x and y coords
+    zero = tf.zeros([], dtype="int32")
+    max_x = tf.cast(W-1, dtype="int32")
+    max_y = tf.cast(H-1, dtype="int32")
+
+    # Find corner coordinates
+    x0 = tf.cast(tf.floor(x), "int32")
+    x1 = x0 + 1
+    y0 = tf.cast(tf.floor(y), "int32")
+    y1 = y0 + 1
+
+    # Clip corner coordinates to legal values
+    x0 = tf.clip_by_value(x0, zero, max_x)
+    x1 = tf.clip_by_value(x1, zero, max_x)
+    y0 = tf.clip_by_value(y0, zero, max_y)
+    y1 = tf.clip_by_value(y1, zero, max_y)
+
+    # Get corner pixel values
+    Ia = _pixel_intensity(img, x0, y0) # bottom left
+    Ib = _pixel_intensity(img, x0, y1) # top left
+    Ic = _pixel_intensity(img, x1, y0) # bottom right
+    Id = _pixel_intensity(img, x1, y1) # top right
+
+    # Define weights of corner coordinates using deltas
+    # First recast corner coords as float32
+    x0 = tf.cast(x0, "float32")
+    x1 = tf.cast(x1, "float32")
+    y0 = tf.cast(y0, "float32")
+    y1 = tf.cast(y1, "float32")
+
+    # Weights
+    wa = (x1 - x) * (y1 - y)
+    wb = (x1 - x) * (y - y0)
+    wc = (x - x0) * (y1 - y)
+    wd = (x - x0) * (y - y0)
+
+    # Add dimension for linear combination because
+    # img = (B, H, W, C) and w = (B, H, W)
+    wa = tf.expand_dims(wa, axis=3)
+    wb = tf.expand_dims(wb, axis=3)
+    wc = tf.expand_dims(wc, axis=3)
+    wd = tf.expand_dims(wd, axis=3)
+
+    # Linearly combine corner intensities with weights
+    out = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
+
+    return out
+
+
 def _pixel_intensity(img, x, y):
     shape = tf.shape(img)
     batch_size = shape[0]
