@@ -1,6 +1,32 @@
 import tensorflow as tf
 
 
+def spatial_transformer(input_fmap, theta=None, out_dims=None, **kwargs):
+    # Input dimensions
+    B, H, W, C = input_fmap.shape
+
+    # Initialize theta to identity transformation if not provided
+    if not theta:
+        theta = tf.constant([ [1,0,0], [0,1,0] ])
+        theta = tf.cast(theta, "float32")
+
+    # Initialize out_dims to input dimensions if not provided
+    if out_dims:
+        out_H, out_W = out_dims
+        batch_grids = _grid_generator(out_H, out_W, theta) # transform coordinates
+    else:
+        batch_grids = _grid_generator(H, W, theta) # transform coordinates
+
+    # Extract source coordinates
+    xs = batch_grids[:, 0, :, :]
+    ys = batch_grids[:, 1, :, :]
+
+    # Compile output feature map
+    out_fmap = _bilinear_sampler(input_fmap, xs, ys)
+
+    return out_fmap
+
+
 def _grid_generator(H, W, theta):
     batch_size = theta.shape[0]
 
