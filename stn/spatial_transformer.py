@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 def _grid_generator(H, W, theta):
     batch_size = theta.shape[0]
 
@@ -27,3 +28,19 @@ def _grid_generator(H, W, theta):
     batch_grids = tf.reshape(batch_grids, [batch_size, 2, H, W])
 
     return batch_grids
+
+
+def _pixel_intensity(img, x, y):
+    shape = tf.shape(img)
+    batch_size = shape[0]
+    H = shape[1]
+    W = shape[2]
+
+    batch_idx = tf.range(0, batch_size)
+    batch_idx = tf.reshape(batch_idx, (batch_size, 1, 1))
+
+    b = tf.tile(batch_idx, (1, W, H))
+    indicies = tf.stack([b, y, x], axis=3)
+
+    return tf.gather_nd(img, indicies)
+
