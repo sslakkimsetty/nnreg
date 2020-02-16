@@ -9,6 +9,11 @@ def spatial_transformer(input_fmap, theta=None, out_dims=None, **kwargs):
     if not theta:
         theta = tf.constant([ [1,0,0], [0,1,0] ])
         theta = tf.cast(theta, "float32")
+        theta = tf.expand_dims(theta, axis=0)
+        theta = tf.tile(theta, (B,1,1))
+
+    # Reshape theta to
+    theta = tf.reshape(theta, [B, 2, 3])
 
     # Initialize out_dims to input dimensions if not provided
     if out_dims:
