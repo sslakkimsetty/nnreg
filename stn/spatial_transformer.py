@@ -1,19 +1,28 @@
 import tensorflow as tf
+import numpy as np
 
 
 def spatial_transformer(input_fmap, theta=None, out_dims=None, **kwargs):
+
     # Input dimensions
+    DIM = len(input_fmap.shape)
+
     B, H, W, C = input_fmap.shape
+    if B == None:
+        B = 1
 
     # Initialize theta to identity transformation if not provided
-    if not theta:
-        theta = tf.constant([ [1,0,0], [0,1,0] ])
-        theta = tf.cast(theta, "float32")
+    if type(theta) == "NoneType":
+        theta = tf.constant([1,0,0, 0,1,0])
         theta = tf.expand_dims(theta, axis=0)
-        theta = tf.tile(theta, (B,1,1))
+        theta = tf.tile(theta, tf.stack([B,1,1]))
 
     # Reshape theta to
     theta = tf.reshape(theta, [B, 2, 3])
+    theta = tf.cast(theta, "float32")
+    if len(theta.shape) == 2:
+        theta = tf.expand_dims(theta, axis=0)
+        theta = tf.tile(theta, tf.stack([B,1,1]))
 
     # Initialize out_dims to input dimensions if not provided
     if out_dims:
@@ -129,7 +138,7 @@ def _pixel_intensity(img, x, y):
     batch_idx = tf.range(0, batch_size)
     batch_idx = tf.reshape(batch_idx, (batch_size, 1, 1))
 
-    b = tf.tile(batch_idx, (1, W, H))
+    b = tf.tile(batch_idx, [1, W, H])
     indicies = tf.stack([b, y, x], axis=3)
 
     return tf.gather_nd(img, indicies)
