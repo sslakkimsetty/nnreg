@@ -4,7 +4,7 @@ import math
 
 
 
-def spatial_transformer(input_fmap, theta=None, out_dims=None,
+def transformer(input_fmap, theta=None, out_dims=None,
                         grid_res=None, **kwargs):
     """
     Main transformer function that acts as a layer
@@ -40,13 +40,13 @@ def spatial_transformer(input_fmap, theta=None, out_dims=None,
 
     # If grid res is not provided,
     if not grid_res:
-        grid_res = (5, 5)
+        grid_res = (5.0, 5.0)
 
     sx, sy = grid_res
     gx, gy = math.ceil(W/sx), math.ceil(H/sy)
-    nx, ny = gx+3, gy+3
-    theta = tf.reshape(theta, shape=[1,2,ny,nx])
-    theta = tf.tile(theta, tf.stack([B,1,1,1]))
+    nx, ny = int(gx+3), int(gy+3)
+    theta = tf.reshape(theta, shape=[B,2,ny,nx])
+    # theta = tf.tile(theta, tf.stack([B,1,1,1]))
     theta = tf.cast(theta, tf.float32)
 
     # Initialize out_dims to input dimensions if not provided
@@ -57,8 +57,8 @@ def spatial_transformer(input_fmap, theta=None, out_dims=None,
         batch_grids = _grid_generator(H, W, theta, grid_res)
 
     # Extract source coordinates
-    xs = batch_grids[:, 0, :, :]
-    ys = batch_grids[:, 1, :, :]
+    xs = batch_grids[0, :, :, :]
+    ys = batch_grids[1, :, :, :]
 
     # Compile output feature map
     out_fmap = _bilinear_sampler(input_fmap, xs, ys)
@@ -68,7 +68,7 @@ def spatial_transformer(input_fmap, theta=None, out_dims=None,
 
 def _grid_generator(H, W, theta=None, grid_res=None):
     # theta shape B, 2, nx, ny
-    batch_size, nx, ny, _ = theta.shape
+    batch_size, _, nx, ny = theta.shape
 
     sx, sy = grid_res
 
@@ -78,7 +78,7 @@ def _grid_generator(H, W, theta=None, grid_res=None):
     xt, yt = tf.meshgrid(x, y)
 
     # Calculate base indices and bspline inputs
-    px, py = np.floor(xt/sx), np.floor(yt/sy)
+    px, py = tf.floor(xt/sx), tf.floor(yt/sy)
     u = (xt/sx) - px
     v = (yt/sy) - py
 
@@ -92,69 +92,104 @@ def _grid_generator(H, W, theta=None, grid_res=None):
     Bv = tf.transpose(Bv)
 
     # Compute theta patches
-    theta_x = tf.expand_dims(theta[:,0,:,:], axis=3)
-    theta_y = tf.expand_dims(theta[:,1,:,:], axis=3)
+    # theta_x = tf.expand_dims(theta[:,0,:,:], axis=3)
+    # theta_y = tf.expand_dims(theta[:,1,:,:], axis=3)
 
-    theta_slices_x = tf.image.extract_patches(images=theta_x,
-                                              sizes=[1,4,4,1],
-                                              strides=[1,1,1,1],
-                                              rates=[1,1,1,1],
-                                              padding="VALID")
-    theta_slices_x = tf.reshape(theta_slices_x, (batch_size,ny-3,nx-3,4,4))
+    theta_x = theta[:,0,:,:]
+    theta_y = theta[:,1,:,:]
 
-    theta_slices_y = tf.image.extract_patches(images=theta_y,
-                                              sizes=[1,4,4,1],
-                                              strides=[1,1,1,1],
-                                              rates=[1,1,1,1],
-                                              padding="VALID")
-    theta_slices_y = tf.reshape(theta_slices_y, (batch_size,ny-3,nx-3,4,4))
+    # theta_slices_x = tf.image.extract_patches(images=theta_x,
+    #                                           sizes=[1,4,4,1],
+    #                                           strides=[1,1,1,1],
+    #                                           rates=[1,1,1,1],
+    #                                           padding="VALID")
+    # theta_slices_x = tf.reshape(theta_slices_x, (batch_size,ny-3,nx-3,4,4))
+
+    # theta_slices_y = tf.image.extract_patches(images=theta_y,
+    #                                           sizes=[1,4,4,1],
+    #                                           strides=[1,1,1,1],
+    #                                           rates=[1,1,1,1],
+    #                                           padding="VALID")
+    # theta_slices_y = tf.reshape(theta_slices_y, (batch_size,ny-3,nx-3,4,4))
 
     # Compute offset for each pixel in input feature map
     # !!! TODO since _delta_calculator does not offer support for
     # batches, delta is a simple (2,H,W) shaped tensor
     # So, batchgrids are also without batches support
-    delta = tf.map_fn(lambda x: _delta_calculator(x[0],x[1], theta_slices_x, theta_slices_y), (Bu,Bv),
-                  dtype=(tf.float32, tf.float32))
-    delta = tf.stack(delta, axis=0)
-    delta = tf.reshape(delta, (2,H,W))
+    # delta = tf.map_fn(lambda x: _delta_calculator(x[0],x[1], theta_slices_x, theta_slices_y), (Bu,Bv),
+    #               dtype=(tf.float32, tf.float32))
+    delta = tf.map_fn(lambda x: _delta_calculator(x[0], x[1], theta_x, theta_y), (Bu,Bv),
+                      dtype=(tf.float32, tf.float32))
+    delta_x = tf.expand_dims(delta[0], axis=0)
+    delta_y = tf.expand_dims(delta[1], axis=0)
+    delta = tf.stack([delta_x, delta_y], axis=0)
+    delta = tf.reshape(delta, (2,batch_size,H,W))
+
+    xt = tf.expand_dims(xt, axis=0)
+    xt = tf.tile(xt, tf.stack([batch_size,1,1]))
+
+    yt = tf.expand_dims(yt, axis=0)
+    yt = tf.tile(yt, tf.stack([batch_size,1,1]))
 
     batch_grids = tf.stack([xt, yt], axis=0)
     batch_grids += delta
-    batch_grids = tf.expand_dims(batch_grids, axis=0)
-    batch_grids = tf.tile(batch_grids, tf.stack([batch_size,1,1,1]))
+    # batch_grids = tf.expand_dims(batch_grids, axis=0)
+    # batch_grids = tf.tile(batch_grids, tf.stack([batch_size,1,1,1]))
 
     return batch_grids
 
 
 def _delta_calculator(x, y, theta_slices_x, theta_slices_y):
+    B = theta_slices_x.shape[0]
     x, px = x[:-1], x[-1]
     y, py = y[:-1], y[-1]
 
     x = tf.cast(x, tf.float32)
     y = tf.cast(y, tf.float32)
-    px = tf.cast(px, tf.int32)
-    py = tf.cast(py, tf.int32)
+    # px = tf.cast(px, tf.int32)
+    # py = tf.cast(py, tf.int32)
 
     # !!! TODO theta_slices_x has shape (B, H, W, 4, 4)
     # batches functionality is not present in this function
     # have to add that (for now B = 1) so this works
-    _theta_x = theta_slices_x[0,px, py, :, :]
+    # _theta_x = theta_slices_x[0,px, py, :, :]
+    _px = tf.linspace(start=px, stop=px+3, num=4)
+    _py = tf.linspace(start=py, stop=py+3, num=4)
+    pmeshx, pmeshy = tf.meshgrid(_px, _py)
+    pmeshx = tf.cast(pmeshx, tf.int32)
+    pmeshy = tf.cast(pmeshy, tf.int32)
+    pmeshx = tf.expand_dims(pmeshx, axis=0)
+    pmeshy = tf.expand_dims(pmeshy, axis=0)
+    pmeshx = tf.tile(pmeshx, [B,1,1])
+    pmeshy = tf.tile(pmeshy, [B,1,1])
+
+    batch_idx = tf.range(0, B)
+    batch_idx = tf.reshape(batch_idx, (B, 1, 1))
+
+    b = tf.tile(batch_idx, [1, 4, 4])
+    indices = tf.stack([b, pmeshy, pmeshx], axis=3)
+
+    _theta_x = tf.gather_nd(theta_slices_x, indices)
     _theta_x = tf.cast(_theta_x, tf.float32)
 
-    _theta_y = theta_slices_y[0,px, py, :, :]
+    _theta_y = tf.gather_nd(theta_slices_y, indices)
     _theta_y = tf.cast(_theta_y, tf.float32)
 
     assert (len(x) == 4), "Control point span in x is not 4!"
     assert (len(y) == 4), "Control point span in y is not 4!"
-    assert (_theta_x.shape == (4,4)), "Control point span in x is not (4,4)!"
-    assert (_theta_x.shape == (4,4)), "Control point span in y is not (4,4)!"
+    assert (_theta_x.shape == (B,4,4)), "Control point span in x is not (4,4)!"
+    assert (_theta_x.shape == (B,4,4)), "Control point span in y is not (4,4)!"
 
     x = tf.reshape(x, (-1,1))
     y = tf.reshape(y, (1,-1))
 
     z = tf.matmul(x, y)
-    zx = np.sum(z * _theta_x)
-    zy = np.sum(z * _theta_y)
+    z = tf.expand_dims(z, axis=0)
+    z = tf.tile(z, tf.stack([B,1,1]))
+    zx = tf.math.reduce_sum(z * _theta_x, axis=1)
+    zx = tf.math.reduce_sum(zx, axis=1)
+    zy = tf.math.reduce_sum(z * _theta_y, axis=1)
+    zy = tf.math.reduce_sum(zy, axis=1)
 
     return (zx, zy)
 
