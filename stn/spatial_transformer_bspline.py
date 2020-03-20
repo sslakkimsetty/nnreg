@@ -118,12 +118,18 @@ def _grid_generator(H, W, theta=None, grid_res=None):
     # So, batchgrids are also without batches support
     # delta = tf.map_fn(lambda x: _delta_calculator(x[0],x[1], theta_slices_x, theta_slices_y), (Bu,Bv),
     #               dtype=(tf.float32, tf.float32))
+    # delta = tf.map_fn(lambda x: _delta_calculator(x[0], x[1], theta_x, theta_y), (Bu[12:14,:],Bv[12:14,:]),
     delta = tf.map_fn(lambda x: _delta_calculator(x[0], x[1], theta_x, theta_y), (Bu,Bv),
                       dtype=(tf.float32, tf.float32))
-    delta_x = tf.expand_dims(delta[0], axis=0)
-    delta_y = tf.expand_dims(delta[1], axis=0)
-    delta = tf.stack([delta_x, delta_y], axis=0)
+
+    delta = tf.stack(delta, axis=0)
     delta = tf.reshape(delta, (2,batch_size,H,W))
+    # print(delta)
+    # print(delta[0,0,8:14,8:14])
+    # abc
+    # delta_x = tf.reshape(delta[0], [batch_size,H,W])
+    # delta_y = tf.reshape(delta[1], [batch_size,H,W])
+    # delta = tf.stack([delta_x, delta_y], axis=0)
 
     xt = tf.expand_dims(xt, axis=0)
     xt = tf.tile(xt, tf.stack([batch_size,1,1]))
@@ -158,6 +164,7 @@ def _delta_calculator(x, y, theta_slices_x, theta_slices_y):
     pmeshx, pmeshy = tf.meshgrid(_px, _py)
     pmeshx = tf.cast(pmeshx, tf.int32)
     pmeshy = tf.cast(pmeshy, tf.int32)
+    pmeshx, pmeshy = tf.transpose(pmeshx), tf.transpose(pmeshy)
     pmeshx = tf.expand_dims(pmeshx, axis=0)
     pmeshy = tf.expand_dims(pmeshy, axis=0)
     pmeshx = tf.tile(pmeshx, [B,1,1])
@@ -168,6 +175,8 @@ def _delta_calculator(x, y, theta_slices_x, theta_slices_y):
 
     b = tf.tile(batch_idx, [1, 4, 4])
     indices = tf.stack([b, pmeshy, pmeshx], axis=3)
+
+    # print(indices)
 
     _theta_x = tf.gather_nd(theta_slices_x, indices)
     _theta_x = tf.cast(_theta_x, tf.float32)
@@ -186,10 +195,8 @@ def _delta_calculator(x, y, theta_slices_x, theta_slices_y):
     z = tf.matmul(x, y)
     z = tf.expand_dims(z, axis=0)
     z = tf.tile(z, tf.stack([B,1,1]))
-    zx = tf.math.reduce_sum(z * _theta_x, axis=1)
-    zx = tf.math.reduce_sum(zx, axis=1)
-    zy = tf.math.reduce_sum(z * _theta_y, axis=1)
-    zy = tf.math.reduce_sum(zy, axis=1)
+    zx = tf.math.reduce_sum(z * _theta_x, axis=[1,2])
+    zy = tf.math.reduce_sum(z * _theta_y, axis=[1,2])
 
     return (zx, zy)
 
