@@ -1,10 +1,62 @@
 class SpatialTransformerBspline(tf.keras.layers.Layer):
 
-    def __init__(self):
+    def __init__(self, img_res=None, grid_res=None, out_dims=None, B=None):
         super(SpatialTransformerBspline, self).__init__()
 
+        # !!! TODO support for multi channel featuremaps is missing!
 
-    def _transformer(self, input_fmap, theta=None, out_dims=None, grid_res=None):
+        #### MAIN TRANSFORMER FUNCTION PART ####
+        if not img_res:
+            img_res = (40, 40)
+        self.H, self.W = img_res
+
+        if not grid_res:
+            grid_res = (5.0, 5.0)
+        sx, sy = grid_res
+        self.sx, self.sy = tf.cast(sx, tf.float32), tf.cast(sy, tf.float32)
+
+        if not out_dims:
+            out_dims = img_res
+        self.out_H, self.out_W = out_dims
+
+        gx, gy = tf.math.ceil(self.W/sx), tf.math.ceil(self.H/sy)
+        self.nx, self.ny = tf.cast(gx+3, tf.int32), tf.cast(gy+3, tf.int32)
+
+
+        #### GRID GENERATOR PART ####
+        # Create grid
+        x = tf.linspace(start=0.0, stop=self.W-1, num=self.W)
+        y = tf.linspace(start=0.0, stop=self.H-1, num=self.H)
+        xt, yt = tf.meshgrid(x, y)
+
+        xt = tf.expand_dims(xt, axis=0)
+        xt = tf.tile(xt, tf.stack([B,1,1]))
+
+        yt = tf.expand_dims(yt, axis=0)
+        yt = tf.tile(yt, tf.stack([B,1,1]))
+
+        self.base_grid = tf.stack([xt, yt], axis=0)
+
+        # Calculate base indices and piece wise bspline function inputs
+        px, py = tf.floor(xt/sx), tf.floor(yt/sy)
+        u = (xt/sx) - px
+        v = (yt/sy) - py
+
+        # Compute Bsplines
+        Bu = self._piece_bsplines(u, px) ##
+        Bu = tf.reshape(Bu, shape=(5,-1))
+        self.Bu = tf.transpose(Bu)
+
+        Bv = self._piece_bsplines(v, py) ##
+        Bv = tf.reshape(Bv, shape=(5,-1))
+        self.Bv = tf.transpose(Bv)
+
+        #### ####
+
+
+
+
+    def _transformer(self, input_fmap, theta=None):
         """
         Main transformer function that acts as a layer
         in a neural network. It does two things.
@@ -26,32 +78,39 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
 
         B, H, W, C = input_fmap.shape
         if B == None:
-            B = 1
+            self.B = 1
 
         # Initialize theta to identity transformation if not provided
         if type(theta) == type(None):
-            theta_x = np.zeros((1,ny,nx,1)) / 1.0
-            theta_y = np.zeros((1,ny,nx,1)) / 1.0
-            theta = tf.stack([theta_x, theta_y], axis=0)
+            theta = tf.zeros((self.B,2,self.ny,self.nx), tf.float32)
+        else:
+            theta = tf.reshape(theta, shape=[self.B,2,self.ny,self.nx])
 
-        # If grid res is not provided,
-        if not grid_res:
-            grid_res = (5.0, 5.0)
+        # # If grid res is not provided,
+        # if not grid_res:
+        #     grid_res = (5.0, 5.0)
 
-        sx, sy = grid_res
-        gx, gy = math.ceil(W/sx), math.ceil(H/sy)
-        nx, ny = int(gx+3), int(gy+3)
-        theta = tf.reshape(theta, shape=[B,2,ny,nx])
+        # sx, sy = grid_res
+        # gx, gy = math.ceil(W/sx), math.ceil(H/sy)
+        # nx, ny = int(gx+3), int(gy+3)
+        # theta = tf.reshape(theta, shape=[B,2,ny,nx])
         # theta = tf.cast(theta, tf.float32)
 
         # Initialize out_dims to input dimensions if not provided
-        if out_dims:
-            out_H, out_W = out_dims
-            batch_grids = self._grid_generator(out_H, out_W, theta, grid_res) ##
-        else:
-            batch_grids = self._grid_generator(H, W, theta, grid_res) ##
+        # if out_dims:
+        #     out_H, out_W = out_dims
+        #     batch_grids = self._grid_generator(out_H, out_W, theta, grid_res) ##
+        # else:
+        #     batch_grids = self._grid_generator(H, W, theta, grid_res) ##
+
+        # batch_grids = self._grid_generator(self.out_H, self.out_W, theta, grid_res) ##
+
+        # theta = tf.reshape(theta, shape=[self.B,2,self.ny,self.nx])
+
+        batch_grids = self._grid_generator(theta)
 
         # Extract source coordinates
+        # batch_grids has shape (2,B,H,W)
         xs = batch_grids[0, :, :, :]
         ys = batch_grids[1, :, :, :]
 
@@ -60,101 +119,95 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         return out_fmap
 
 
-    def _grid_generator(self, H, W, theta=None, grid_res=None):
-        # theta shape B, 2, nx, ny
-        B, _, nx, ny = theta.shape
+    def _grid_generator(self, theta=None):
+        # # theta shape B, 2, nx, ny
+        # B, _, nx, ny = theta.shape
 
-        sx, sy = grid_res
+        # sx, sy = grid_res
 
-        # Create meshgrid
-        x = tf.linspace(start=0.0, stop=W-1, num=W)
-        y = tf.linspace(start=0.0, stop=H-1, num=H)
-        xt, yt = tf.meshgrid(x, y)
+        # # Create meshgrid
+        # x = tf.linspace(start=0.0, stop=W-1, num=W)
+        # y = tf.linspace(start=0.0, stop=H-1, num=H)
+        # xt, yt = tf.meshgrid(x, y)
 
-        # Calculate base indices and bspline inputs
-        px, py = tf.floor(xt/sx), tf.floor(yt/sy)
-        u = (xt/sx) - px
-        v = (yt/sy) - py
+        # # Calculate base indices and bspline inputs
+        # px, py = tf.floor(xt/sx), tf.floor(yt/sy)
+        # u = (xt/sx) - px
+        # v = (yt/sy) - py
 
-        # Compute Bsplines
-        Bu = self._piece_bsplines(u, px) ##
-        Bu = tf.reshape(Bu, shape=(5,-1))
-        Bu = tf.transpose(Bu)
+        # # Compute Bsplines
+        # Bu = self._piece_bsplines(u, px) ##
+        # Bu = tf.reshape(Bu, shape=(5,-1))
+        # Bu = tf.transpose(Bu)
 
-        Bv = self._piece_bsplines(v, py) ##
-        Bv = tf.reshape(Bv, shape=(5,-1))
-        Bv = tf.transpose(Bv)
-
-        # Compute theta patches
-        theta_x = theta[:,0,:,:]
-        theta_y = theta[:,1,:,:]
+        # Bv = self._piece_bsplines(v, py) ##
+        # Bv = tf.reshape(Bv, shape=(5,-1))
+        # Bv = tf.transpose(Bv)
 
         # Compute offset for each pixel in input feature map
-        delta = tf.map_fn(lambda x: self._delta_calculator(x[0], x[1], theta_x, theta_y), (Bu,Bv), ##
-                        dtype=(tf.float32, tf.float32))
-
+        delta = tf.map_fn(lambda x: self._delta_calculator(x[0], x[1], theta), ##
+                          (self.Bu, self.Bv),
+                          dtype=(tf.float32, tf.float32))
         delta = tf.stack(delta, axis=0)
-        delta = tf.reshape(delta, (2,B,H,W))
+        delta = tf.reshape(delta, (2,self.B,self.H,self.W))
 
-        xt = tf.expand_dims(xt, axis=0)
-        xt = tf.tile(xt, tf.stack([B,1,1]))
+        # xt = tf.expand_dims(xt, axis=0)
+        # xt = tf.tile(xt, tf.stack([B,1,1]))
 
-        yt = tf.expand_dims(yt, axis=0)
-        yt = tf.tile(yt, tf.stack([B,1,1]))
+        # yt = tf.expand_dims(yt, axis=0)
+        # yt = tf.tile(yt, tf.stack([B,1,1]))
 
-        batch_grids = tf.stack([xt, yt], axis=0)
-        batch_grids += delta
+        # batch_grids = tf.stack([xt, yt], axis=0)
+
+        batch_grids = self.base_grid + delta
         return batch_grids
 
 
-    def _delta_calculator(self, x, y, theta_slices_x, theta_slices_y):
-        B = theta_slices_x.shape[0]
+    def _delta_calculator(self, x, y, theta):
+
         x, px = x[:-1], x[-1]
         y, py = y[:-1], y[-1]
 
-        x = tf.cast(x, tf.float32)
-        y = tf.cast(y, tf.float32)
-        # px = tf.cast(px, tf.int32)
-        # py = tf.cast(py, tf.int32)
+        # x = tf.cast(x, tf.float32)
+        # y = tf.cast(y, tf.float32)
 
-        # !!! TODO theta_slices_x has shape (B, H, W, 4, 4)
-        # batches functionality is not present in this function
-        # have to add that (for now B = 1) so this works
-        # _theta_x = theta_slices_x[0,px, py, :, :]
         _px = tf.linspace(start=px, stop=px+3, num=4)
         _py = tf.linspace(start=py, stop=py+3, num=4)
         pmeshx, pmeshy = tf.meshgrid(_px, _py)
+
         pmeshx = tf.cast(pmeshx, tf.int32)
         pmeshy = tf.cast(pmeshy, tf.int32)
         pmeshx, pmeshy = tf.transpose(pmeshx), tf.transpose(pmeshy)
-        pmeshx = tf.expand_dims(pmeshx, axis=0)
-        pmeshy = tf.expand_dims(pmeshy, axis=0)
-        pmeshx = tf.tile(pmeshx, [B,1,1])
-        pmeshy = tf.tile(pmeshy, [B,1,1])
 
-        batch_idx = tf.range(0, B)
-        batch_idx = tf.reshape(batch_idx, (B, 1, 1))
+        pmeshx = tf.expand_dims(pmeshx, axis=0)
+        pmeshx = tf.tile(pmeshx, [self.B,1,1])
+
+        pmeshy = tf.expand_dims(pmeshy, axis=0)
+        pmeshy = tf.tile(pmeshy, [self.B,1,1])
+
+        batch_idx = tf.range(0, self.B)
+        batch_idx = tf.reshape(batch_idx, (self.B, 1, 1))
 
         b = tf.tile(batch_idx, [1, 4, 4])
         indices = tf.stack([b, pmeshy, pmeshx], axis=3)
 
-        _theta_x = tf.gather_nd(theta_slices_x, indices)
+        _theta_x = tf.gather_nd(theta[:,0], indices) # theta[:,0] is theta_x
         _theta_x = tf.cast(_theta_x, tf.float32)
 
-        _theta_y = tf.gather_nd(theta_slices_y, indices)
+        _theta_y = tf.gather_nd(theta[:,1], indices) # theta[:,1] is theta_y
         _theta_y = tf.cast(_theta_y, tf.float32)
 
         assert (len(x) == 4), "Control point span in x is not 4!"
         assert (len(y) == 4), "Control point span in y is not 4!"
-        assert (_theta_x.shape == (B,4,4)), "Control point span in x is not (4,4)!"
-        assert (_theta_x.shape == (B,4,4)), "Control point span in y is not (4,4)!"
+        assert (_theta_x.shape == (self.B,4,4)), "Control point span in x is not (4,4)!"
+        assert (_theta_x.shape == (self.B,4,4)), "Control point span in y is not (4,4)!"
 
         x = tf.reshape(x, (-1,1))
         y = tf.reshape(y, (1,-1))
 
         z = tf.matmul(x, y)
         z = tf.expand_dims(z, axis=0)
-        z = tf.tile(z, tf.stack([B,1,1]))
+        z = tf.tile(z, tf.stack([self.B,1,1]))
         zx = tf.math.reduce_sum(z * _theta_x, axis=[1,2])
         zy = tf.math.reduce_sum(z * _theta_y, axis=[1,2])
         return (zx, zy)
@@ -258,11 +311,12 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         batch_idx = tf.range(0, B)
         batch_idx = tf.reshape(batch_idx, (B, 1, 1))
 
-        b = tf.tile(batch_idx, [1, W, H])
+        b = tf.tile(batch_idx, [1, H, W])
         indices = tf.stack([b, y, x], axis=3)
         return tf.gather_nd(img, indices)
 
 
-    def call(self, input_fmap, theta=None, out_dims=None, grid_res=None):
-        out = self._transformer(input_fmap, theta, out_dims, grid_res)
+    def call(self, input_fmap, theta=None):
+        self.B = input_fmap.shape[0]
+        out = self._transformer(input_fmap, theta)
         return out
