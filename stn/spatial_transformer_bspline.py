@@ -91,11 +91,7 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         if type(theta) == type(None):
             theta = tf.zeros((self.B,2,self.ny,self.nx), tf.float32)
         else:
-            try:
-                theta = tf.reshape(theta, shape=[self.B,2,self.ny,self.nx])
-            except:
-                theta = tf.reshape(theta, shape=[-1,2,self.ny,self.nx])
-                self.B = theta.shape[0]
+            theta = tf.reshape(theta, shape=[self.B,2,self.ny,self.nx])
 
         batch_grids = self._grid_generator(theta)
 
@@ -127,49 +123,36 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         theta_slices_x = tf.cast(theta_slices_x, tf.float32)
         theta_slices_y = tf.cast(theta_slices_y, tf.float32)
 
-        delta_x = self.Buv[:self.B] * theta_slices_x
+        delta_x = self.Buv * theta_slices_x
         delta_x = tf.reduce_sum(delta_x, axis=[-2,-1])
-        delta_y = self.Buv[:self.B] * theta_slices_y
+        delta_y = self.Buv * theta_slices_y
         delta_y = tf.reduce_sum(delta_y, axis=[-2,-1])
 
         delta = tf.stack([delta_x, delta_y], axis=0)
 
-        batch_grids = self.base_grid[:,:self.B] + delta
+        batch_grids = self.base_grid + delta
         return batch_grids
 
 
     def _delta_calculator(self, b, px, py, theta):
 
-        px = px[0:self.B]
-        py = py[0:self.B]
-
-        t00 = tf.gather_nd(theta, tf.stack([b,py+0,px+0],3))
-        t01 = tf.gather_nd(theta, tf.stack([b,py+0,px+1],3))
-        t02 = tf.gather_nd(theta, tf.stack([b,py+0,px+2],3))
-        t03 = tf.gather_nd(theta, tf.stack([b,py+0,px+3],3))
-
-        t10 = tf.gather_nd(theta, tf.stack([b,py+1,px+0],3))
-        t11 = tf.gather_nd(theta, tf.stack([b,py+1,px+1],3))
-        t12 = tf.gather_nd(theta, tf.stack([b,py+1,px+2],3))
-        t13 = tf.gather_nd(theta, tf.stack([b,py+1,px+3],3))
-
-        t20 = tf.gather_nd(theta, tf.stack([b,py+2,px+0],3))
-        t21 = tf.gather_nd(theta, tf.stack([b,py+2,px+1],3))
-        t22 = tf.gather_nd(theta, tf.stack([b,py+2,px+2],3))
-        t23 = tf.gather_nd(theta, tf.stack([b,py+2,px+3],3))
-
-        t30 = tf.gather_nd(theta, tf.stack([b,py+3,px+0],3))
-        t31 = tf.gather_nd(theta, tf.stack([b,py+3,px+1],3))
-        t32 = tf.gather_nd(theta, tf.stack([b,py+3,px+2],3))
-        t33 = tf.gather_nd(theta, tf.stack([b,py+3,px+3],3))
-
-        t0 = tf.stack([t00,t01,t02,t03], axis=-1)
-        t1 = tf.stack([t10,t11,t12,t13], axis=-1)
-        t2 = tf.stack([t20,t21,t22,t23], axis=-1)
-        t3 = tf.stack([t30,t31,t32,t33], axis=-1)
+        t0 = self._compute_theta_slices(b, px, py, theta, 0)
+        t1 = self._compute_theta_slices(b, px, py, theta, 1)
+        t2 = self._compute_theta_slices(b, px, py, theta, 2)
+        t3 = self._compute_theta_slices(b, px, py, theta, 3)
 
         t = tf.stack([t0,t1,t2,t3], axis=-1)
         return t
+
+
+    def _compute_theta_slices(self, b, px, py, theta, i):
+        ti0 = tf.gather_nd(theta, tf.stack([b,py+i,px+0],3))
+        ti1 = tf.gather_nd(theta, tf.stack([b,py+i,px+1],3))
+        ti2 = tf.gather_nd(theta, tf.stack([b,py+i,px+2],3))
+        ti3 = tf.gather_nd(theta, tf.stack([b,py+i,px+3],3))
+
+        ti = tf.stack([ti0,ti1,ti2,ti3], axis=-1)
+        return ti
 
 
     def _piece_bsplines(self, u):
@@ -268,8 +251,6 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         B, H, W, C = img.shape
         if B == None:
             B = 1
-            x = tf.expand_dims(x[0], axis=0)
-            y = tf.expand_dims(y[0], axis=0)
 
         batch_idx = tf.range(0, B)
         batch_idx = tf.reshape(batch_idx, (B, 1, 1))
@@ -283,3 +264,4 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         self.B = B
         out = self._transformer(input_fmap, theta)
         return out
+
