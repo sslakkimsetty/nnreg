@@ -91,7 +91,11 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         if type(theta) == type(None):
             theta = tf.zeros((self.B,2,self.ny,self.nx), tf.float32)
         else:
-            theta = tf.reshape(theta, shape=[self.B,2,self.ny,self.nx])
+            try:
+                theta = tf.reshape(theta, shape=[self.B,2,self.ny,self.nx])
+            except:
+                theta = tf.reshape(theta, shape=[-1,2,self.ny,self.nx])
+                self.B = theta.shape[0]
 
         batch_grids = self._grid_generator(theta)
 
@@ -123,18 +127,20 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         theta_slices_x = tf.cast(theta_slices_x, tf.float32)
         theta_slices_y = tf.cast(theta_slices_y, tf.float32)
 
-        delta_x = self.Buv * theta_slices_x
+        delta_x = self.Buv[:self.B] * theta_slices_x
         delta_x = tf.reduce_sum(delta_x, axis=[-2,-1])
-        delta_y = self.Buv * theta_slices_y
+        delta_y = self.Buv[:self.B] * theta_slices_y
         delta_y = tf.reduce_sum(delta_y, axis=[-2,-1])
 
         delta = tf.stack([delta_x, delta_y], axis=0)
 
-        batch_grids = self.base_grid + delta
+        batch_grids = self.base_grid[:,:self.B] + delta
         return batch_grids
 
 
     def _delta_calculator(self, b, px, py, theta):
+        px = px[0:self.B]
+        py = py[0:self.B]
 
         t0 = self._compute_theta_slices(b, px, py, theta, 0)
         t1 = self._compute_theta_slices(b, px, py, theta, 1)
@@ -251,6 +257,8 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         B, H, W, C = img.shape
         if B == None:
             B = 1
+            x = tf.expand_dims(x[0], axis=0)
+            y = tf.expand_dims(y[0], axis=0)
 
         batch_idx = tf.range(0, B)
         batch_idx = tf.reshape(batch_idx, (B, 1, 1))
