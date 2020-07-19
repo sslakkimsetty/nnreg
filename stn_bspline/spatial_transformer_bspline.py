@@ -1,3 +1,6 @@
+import tensorflow as tf
+import numpy as np
+
 class SpatialTransformerBspline(tf.keras.layers.Layer):
 
     def __init__(self, img_res=None, grid_res=None, out_dims=None, B=None):
