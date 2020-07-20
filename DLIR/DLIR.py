@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from tf.keras import layers
+from tensorflow.keras import layers
 
 
 class Linear(layers.Layer):
