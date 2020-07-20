@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
+from tensorflow.keras.models import Sequential
 from tensorflow.keras import layers
+from tensorflow.keras.layers import Dense, Dropout, Conv2D, Reshape, Flatten, MaxPooling2D
 
 
 class Linear(layers.Layer):
