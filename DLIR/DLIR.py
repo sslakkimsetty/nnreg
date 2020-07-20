@@ -1,11 +1,12 @@
 import tensorflow as tf
 import numpy as np
+from tf.keras import layers
 
 
 class Linear(layers.Layer):
 
     def __init__(self, units=32, input_dim=32,
-                 is_transformer_regressor=False):
+        is_transformer_regressor=False):
         super(Linear, self).__init__()
 
         if is_transformer_regressor:
