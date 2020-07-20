@@ -3,6 +3,7 @@ import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Dense, Dropout, Conv2D, Reshape, Flatten, MaxPooling2D
+from spatial_transformer.stn_bspline import SpatialTransformerBspline
 
 
 class Linear(layers.Layer):
