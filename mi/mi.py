@@ -1,4 +1,5 @@
-
+import tensorflow as tf
+import numpy as np
 
 def sampleCoords(dims, n):
     # dims are (H,W)
