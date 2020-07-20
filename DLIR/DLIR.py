@@ -6,6 +6,7 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, Reshape, Flatten, Ma
 from spatial_transformer.stn_bspline import SpatialTransformerBspline
 
 
+
 class Linear(layers.Layer):
 
     def __init__(self, units=32, input_dim=32,
@@ -72,7 +73,8 @@ class TransformationRegressor(tf.keras.layers.Layer):
 
 class DLIR(tf.keras.models.Model):
 
-    def __init__(self, drate=0.2, grid_res=None, img_res=None):
+    def __init__(self, drate=0.2, grid_res=None, img_res=None,
+        input_dim=None):
         super(DLIR, self).__init__()
         self.grid_res = grid_res
         self.img_res = img_res
@@ -91,8 +93,7 @@ class DLIR(tf.keras.models.Model):
         gx, gy = tf.math.ceil(W/sx), tf.math.ceil(H/sy)
         nx, ny = tf.cast(gx+3, tf.int32), tf.cast(gy+3, tf.int32)
 
-        self.transformer_regressor = TransformationRegressor(theta_units=2*ny*nx,
-                                                             input_dim=10*21*21)
+        self.transformer_regressor = TransformationRegressor(theta_units=2*ny*nx, input_dim=input_dim)
 
 
     def call(self, inputs):
