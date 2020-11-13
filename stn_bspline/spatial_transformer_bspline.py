@@ -230,6 +230,8 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         wc = (x - x0) * (y1 - y)
         wd = (x - x0) * (y - y0)
 
+        # assert (wa + wb + wc + wd == 1.0), "Weights not equal to 1.0"
+
         # Add dimension for linear combination because
         # img = (B, H, W, C) and w = (B, H, W)
         wa = tf.expand_dims(wa, axis=3)
