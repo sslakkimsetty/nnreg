@@ -18,8 +18,10 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
 
         #### GRID GENERATOR PART ####
         # Create grid
-        x = tf.linspace(start=0.0, stop=self.W-1, num=self.W)
-        y = tf.linspace(start=0.0, stop=self.H-1, num=self.H)
+        x = tf.linspace(start=0.0, stop=self.out_W-1, num=self.out_W)
+        x = x / (self.out_W-1)
+        y = tf.linspace(start=0.0, stop=self.out_H-1, num=self.out_H)
+        y = y / (self.out_H-1)
         xt, yt = tf.meshgrid(x, y)
 
         xt = tf.expand_dims(xt, axis=0)
@@ -67,7 +69,7 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
                 self.B = theta.shape[0]
 
         base_grid = tf.transpose(self.base_grid, [2,3,0,1])
-        ones = np.ones((H, W, 1, self.B))
+        ones = np.ones((self.out_H, self.out_W, 1, self.B))
         base_grid = np.concatenate([base_grid, ones], axis=2)
 
         # !!! PROVISIONAL FIX ONLY
@@ -80,7 +82,9 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
         # Extract source coordinates
         # batch_grids has shape (2,B,H,W)
         xs = batch_grids[0, :, :, :]
+        xs = xs * (self.W-1)
         ys = batch_grids[1, :, :, :]
+        ys = ys * (self.H-1)
 
         # Compile output feature map
         out_fmap = self._bilinear_sampler(input_fmap, xs, ys) ##
@@ -178,7 +182,7 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
         batch_idx = tf.range(0, B)
         batch_idx = tf.reshape(batch_idx, (B, 1, 1))
 
-        b = tf.tile(batch_idx, [1, H, W])
+        b = tf.tile(batch_idx, [1, self.out_H, self.out_W])
         indices = tf.stack([b, y, x], axis=3)
         return tf.gather_nd(img, indices)
 
