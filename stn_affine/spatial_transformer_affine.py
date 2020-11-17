@@ -67,6 +67,7 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
             except:
                 theta = tf.reshape(theta, shape=[-1,2,3,C])
                 self.B = theta.shape[0]
+                print(self.B)
 
         base_grid = tf.transpose(self.base_grid, [2,3,0,1])
         ones = np.ones((self.out_H, self.out_W, 1, self.B))
@@ -74,8 +75,18 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
 
         # !!! PROVISIONAL FIX ONLY
         theta = tf.squeeze(theta)
+        # M1 = np.array([[1/(self.W-1), 2*np.pi/(self.W-1), 1/(self.W-1)],
+        #                [2*np.pi/(self.H-1), 1/(self.H-1), 1/(self.H-1)]]).astype(np.float32)
+        # M2 = np.array([[0.5/(self.W-1), -np.pi/(self.W-1), 0/(self.W-1)],
+        #                [-np.pi/(self.H-1), 0.5/(self.H-1), 0/(self.H-1)]]).astype(np.float32)
 
-        # batch_grids = theta.dot(self.base_grid)
+        M1 = np.array([[1, 2*np.pi, 0.2],
+                       [2*np.pi, 1, 0.2]]).astype(np.float32)
+        M2 = np.array([[0.5, -np.pi, -0.1],
+                       [-np.pi, 0.5, -0.1]]).astype(np.float32)
+
+        theta = tf.math.multiply(theta, M1) + M2
+
         batch_grids = tf.linalg.matmul(theta, base_grid)
         batch_grids = tf.transpose(batch_grids, [2,3,0,1])
 
