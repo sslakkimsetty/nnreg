@@ -80,10 +80,10 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
         # M2 = np.array([[0.5/(self.W-1), -np.pi/(self.W-1), 0/(self.W-1)],
         #                [-np.pi/(self.H-1), 0.5/(self.H-1), 0/(self.H-1)]]).astype(np.float32)
 
-        M1 = np.array([[1, 2*np.pi, 0.2],
-                       [2*np.pi, 1, 0.2]]).astype(np.float32)
-        M2 = np.array([[0.5, -np.pi, -0.1],
-                       [-np.pi, 0.5, -0.1]]).astype(np.float32)
+        M1 = np.array([[1, np.pi, 0.2],
+                       [np.pi, 1, 0.2]]).astype(np.float32)
+        M2 = np.array([[0.5, -np.pi/2, -0.1],
+                       [-np.pi/2, 0.5, -0.1]]).astype(np.float32)
 
         theta = tf.math.multiply(theta, M1) + M2
 
