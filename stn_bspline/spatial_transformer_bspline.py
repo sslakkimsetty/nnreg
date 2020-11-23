@@ -10,20 +10,21 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
 
         #### MAIN TRANSFORMER FUNCTION PART ####
         if not img_res:
-            img_res = (40, 40)
+            img_res = (100, 100)
         self.H, self.W = img_res
-
-        if not grid_res:
-            grid_res = (5.0, 5.0)
-        sx, sy = grid_res
-        self.sx, self.sy = tf.cast(sx, tf.float32), tf.cast(sy, tf.float32)
 
         if not out_dims:
             out_dims = img_res
         self.out_H, self.out_W = out_dims
 
-        gx, gy = tf.math.ceil(self.W/sx), tf.math.ceil(self.H/sy)
-        self.nx, self.ny = tf.cast(gx+3, tf.int32), tf.cast(gy+3, tf.int32)
+        if not grid_res:
+            grid_res = (tf.math.ceil(self.W/7), tf.math.ceil(self.H/7))
+
+        nx, ny = grid_res
+        self.nx, self.ny = tf.cast(nx, tf.int32), tf.cast(ny, tf.int32)
+
+        gx, gy = self.nx-3, self.ny-3
+        sx, sy = tf.cast(self.W/gx, tf.float32), tf.cast(self.W/gy, tf.float32)
 
 
         #### GRID GENERATOR PART ####
