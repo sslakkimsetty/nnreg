@@ -203,3 +203,12 @@ class SpatialTransformerAffine(tf.keras.layers.Layer):
         out = self._transformer(input_fmap, theta)
         return out
 
+
+
+# 1st two paragraphs in text: The biotechnological problem is. ...
+# the machine learning problem is ...
+# the contributions is ...
+
+# For slides as well
+
+
