@@ -110,7 +110,7 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
 
         # Compile output feature map
         out_fmap = self._bilinear_sampler(input_fmap, xs, ys) ##
-        return out_fmap
+        return out_fmap, batch_grids
 
 
     def _grid_generator(self, theta=None):
