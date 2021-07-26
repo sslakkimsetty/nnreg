@@ -101,7 +101,7 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
                 theta = tf.reshape(theta, shape=[-1,2,self.ny,self.nx])
                 self.B = theta.shape[0]
 
-        batch_grids = self._grid_generator(theta)
+        batch_grids, delta = self._grid_generator(theta)
 
         # Extract source coordinates
         # batch_grids has shape (2,B,H,W)
@@ -110,7 +110,7 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
 
         # Compile output feature map
         out_fmap = self._bilinear_sampler(input_fmap, xs, ys) ##
-        return out_fmap, batch_grids
+        return out_fmap, delta
 
 
     def _grid_generator(self, theta=None):
@@ -139,7 +139,7 @@ class SpatialTransformerBspline(tf.keras.layers.Layer):
         delta = tf.stack([delta_x, delta_y], axis=0)
 
         batch_grids = self.base_grid[:,:self.B] + delta
-        return batch_grids
+        return batch_grids, delta
 
 
     def _delta_calculator(self, b, px, py, theta):
